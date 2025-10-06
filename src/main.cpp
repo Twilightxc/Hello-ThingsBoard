@@ -1,4 +1,4 @@
-// Hello-ThingsBoard Refactored
+// Hello-ThingsBoard
 // Send Student ID as Attributes + Random Value as Telemetry
 
 #include <WiFi.h>
@@ -10,13 +10,18 @@ namespace Config {
   constexpr char WIFI_SSID[]       = "Wokwi-GUEST";
   constexpr char WIFI_PASSWORD[]   = "";
 
-  constexpr char STUDENT_ID[]      = "";   // <-- Replace with your Student ID
   constexpr char DEVICE_ID[]       = "";
-  constexpr char DEVICE_TOKEN[]    = "";   // <-- Replace with your Device Token
+  constexpr char DEVICE_TOKEN[]    = "qRdIKYqwpoZbNhG3lGCl";   // <-- Replace with your Device Token
   constexpr char DEVICE_PASSWORD[] = "";
 
   constexpr char SERVER[]          = "demo.thingsboard.io";
   constexpr int  PORT              = 1883;
+
+  constexpr char STUDENT_ID[]      = "6750091";   // <-- Replace with your Student ID
+  constexpr char FIRMWARE_VERSION[] = "1.0";   // <-- Replace here with your Firmware Version
+
+  inline String STATUS = "";
+
 }
 
 // ================== GLOBALS ==================
@@ -46,6 +51,7 @@ void loop() {
   ensureMQTTConnected();
 
   mqttClient.loop();
+
   sendData();
 
   delay(1000); // adjust interval to avoid flooding server
@@ -98,6 +104,7 @@ void ensureMQTTConnected() {
     Serial.println("☁️ Connecting to ThingsBoard ...");
     if (mqttClient.connect(Config::DEVICE_ID, Config::DEVICE_TOKEN, Config::DEVICE_PASSWORD)) {
       Serial.println("✅ Connected to ThingsBoard");
+      Config::STATUS = "ONLINE"; // set status after successful connect
     } else {
       Serial.print("❌ MQTT connect failed, state=");
       Serial.println(mqttClient.state());
@@ -107,30 +114,32 @@ void ensureMQTTConnected() {
 }
 
 void publishTelemetry() {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["random_value"] = random(0, 100);
 
-  char buffer[128];
-  size_t n = serializeJson(doc, buffer);
+  String payload;
+  serializeJson(doc, payload);
 
-  if (mqttClient.publish("v1/devices/me/telemetry", buffer, n)) {
+  if (mqttClient.publish("v1/devices/me/telemetry", payload.c_str())) {
     Serial.println("📨 Telemetry sent:");
-    Serial.println(buffer);
+    Serial.println(payload);
   } else {
     Serial.println("❌ Telemetry publish failed");
   }
 }
 
 void publishAttributes() {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["student_id"] = Config::STUDENT_ID;
+  doc["firmware_version"] = Config::FIRMWARE_VERSION;
+  doc["status"] = Config::STATUS;
 
-  char buffer[128];
-  size_t n = serializeJson(doc, buffer);
+  String payload;
+  serializeJson(doc, payload);
 
-  if (mqttClient.publish("v1/devices/me/attributes", buffer, n)) {
+  if (mqttClient.publish("v1/devices/me/attributes", payload.c_str())) {
     Serial.println("📨 Attributes sent:");
-    Serial.println(buffer);
+    Serial.println(payload);
   } else {
     Serial.println("❌ Attributes publish failed");
   }
