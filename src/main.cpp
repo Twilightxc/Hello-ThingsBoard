@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <Arduino.h>
 
 // ================== CONFIG ==================
 namespace Config {
@@ -11,10 +12,10 @@ namespace Config {
   constexpr char WIFI_PASSWORD[]   = "";
 
   constexpr char DEVICE_ID[]       = "";
-  constexpr char DEVICE_TOKEN[]    = "qRdIKYqwpoZbNhG3lGCl";   // <-- Replace with your Device Token
+  constexpr char DEVICE_TOKEN[]    = "LCEKKEtlhCTXXlU6krEL";   // <-- Replace with your Device Token
   constexpr char DEVICE_PASSWORD[] = "";
 
-  constexpr char SERVER[]          = "demo.thingsboard.io";
+  constexpr char SERVER[]          = "104.196.24.70";
   constexpr int  PORT              = 1883;
 
   constexpr char STUDENT_ID[]      = "6750091";   // <-- Replace with your Student ID
