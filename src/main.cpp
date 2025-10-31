@@ -12,14 +12,14 @@ namespace Config {
   constexpr char WIFI_PASSWORD[]   = "";
 
   constexpr char DEVICE_ID[]       = "";
-  constexpr char DEVICE_TOKEN[]    = "LCEKKEtlhCTXXlU6krEL";   // <-- Replace with your Device Token
+  constexpr char DEVICE_TOKEN[]    = "";   // <-- Replace with your Device Token
   constexpr char DEVICE_PASSWORD[] = "";
 
-  constexpr char SERVER[]          = "104.196.24.70";
+  constexpr char SERVER[]          = "104.196.24.70"; // solve DNS Failed demo.thingsboard.io issues by using direct IP
   constexpr int  PORT              = 1883;
 
-  constexpr char STUDENT_ID[]      = "6750091";   // <-- Replace with your Student ID
-  constexpr char FIRMWARE_VERSION[] = "1.0";   // <-- Replace here with your Firmware Version
+  constexpr char STUDENT_ID[]      = "";   // <-- Replace with your Student ID
+  constexpr char FIRMWARE_VERSION[] = "";   // <-- Replace here with your Firmware Version
 
   inline String STATUS = "";
 
