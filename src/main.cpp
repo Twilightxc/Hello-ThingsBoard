@@ -1,152 +1,131 @@
-// Hello-ThingsBoard
-// Send Student ID as Attributes + Random Value as Telemetry
-
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <Arduino.h>
+#include <DHT.h>
 
-// ================== CONFIG ==================
-namespace Config {
-  constexpr char WIFI_SSID[]       = "Wokwi-GUEST";
-  constexpr char WIFI_PASSWORD[]   = "";
-
-  constexpr char DEVICE_ID[]       = "";
-  constexpr char DEVICE_TOKEN[]    = "";   // <-- Replace with your Device Token
-  constexpr char DEVICE_PASSWORD[] = "";
-
-  constexpr char SERVER[]          = "104.196.24.70"; // solve DNS Failed demo.thingsboard.io issues by using direct IP
-  constexpr int  PORT              = 1883;
-
-  constexpr char STUDENT_ID[]      = "";   // <-- Replace with your Student ID
-  constexpr char FIRMWARE_VERSION[] = "";   // <-- Replace here with your Firmware Version
-
-  inline String STATUS = "";
-
-}
-
-// ================== GLOBALS ==================
-WiFiClient espClient;
-PubSubClient mqttClient(espClient);
-
-// ================== DECLARATIONS ==================
-void initWiFi();
-bool ensureWiFiConnected();
-void ensureMQTTConnected();
 void publishTelemetry();
 void publishAttributes();
-void sendData();
 
-// ================== SETUP ==================
+// --- Configuration ---
+char WIFI_SSID[] = "Wokwi-GUEST";
+char WIFI_PASSWORD[] = "";      
+const char* token = ""; // <-- Replace with your Access Token
+const char* thingsboard_server = "demo.thingsboard.io"; // if DNS fail use 104.196.24.70
+const int port = 1883;
+
+const char STUDENT_ID[]      = "";   // <-- Replace with your Student ID
+const char FIRMWARE_VERSION[] = "1.0"; 
+
+// --- Hardware Pins ---
+#define typeDHT DHT22
+#define pinDHT 15
+#define pinLED 16 
+
+DHT dht(pinDHT, typeDHT);
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+unsigned long lastDHTReadTime = 0;
+const long DHTReadInterval = 5000; 
+
+// --- Prototypes ---
+void onMessage(char* topic, byte* payload, unsigned int length);
+void connectToMQTTBroker();
+
 void setup() {
   Serial.begin(9600);
-  initWiFi();
+  pinMode(pinLED, OUTPUT);
+  digitalWrite(pinLED, HIGH);
+  dht.begin();
 
-  mqttClient.setServer(Config::SERVER, Config::PORT);
-  randomSeed(analogRead(34));  // seed RNG for telemetry
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\n✅ Connected to WiFi");
+
+  client.setServer(thingsboard_server, port);
+  // *** set Callback receive from Server ***
+  client.setCallback(onMessage);
 }
 
-// ================== LOOP ==================
 void loop() {
-  if (!ensureWiFiConnected()) return;
-  ensureMQTTConnected();
+  if (!client.connected()) {
+    connectToMQTTBroker();
+  }
+  client.loop();
 
-  mqttClient.loop();
-
-  sendData();
-
-  delay(1000); // adjust interval to avoid flooding server
+  publishTelemetry();
 }
 
-// ================== IMPLEMENTATION ==================
-void initWiFi() {
-  Serial.print("🛜 Connecting to WiFi: ");
-  Serial.println(Config::WIFI_SSID);
+// --- RPC Callback Function ---
+// this function active when Postman/ThingsBoard send API
+void onMessage(char* topic, byte* payload, unsigned int length) {
+  Serial.print("📩 Message arrived [");
+  Serial.print(topic);
+  Serial.println("]");
 
-  WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
-  unsigned long startAttempt = millis();
+  JsonDocument doc;
+  deserializeJson(doc, payload, length);
 
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 30000) {
-    delay(500);
-    Serial.print(".");
+  String methodName = doc["method"]; // "setLed"
+  bool params = doc["params"];       // true or false
+
+  if (methodName == "setLed") {
+    digitalWrite(pinLED, params ? LOW : HIGH);
+    Serial.print("💡 LED Status: ");
+    Serial.println(params ? "ON" : "OFF");
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi Connected");
-  } else {
-    Serial.println("\n❌ WiFi connection failed. Restarting...");
-    ESP.restart();
-  }
+  // send Response back (Optional for Two-way RPC)
+  String responseTopic = String(topic);
+  responseTopic.replace("request", "response");
+  client.publish(responseTopic.c_str(), params ? "{\"success\":true}" : "{\"success\":false}");
 }
 
-bool ensureWiFiConnected() {
-  if (WiFi.status() == WL_CONNECTED) return true;
-
-  Serial.println("⚠️ WiFi lost! Reconnecting...");
-  WiFi.reconnect();
-
-  unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 15000) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi Reconnected");
-    return true;
-  }
-
-  Serial.println("\n❌ WiFi reconnect failed");
-  return false;
-}
-
-void ensureMQTTConnected() {
-  while (!mqttClient.connected()) {
-    Serial.println("☁️ Connecting to ThingsBoard ...");
-    if (mqttClient.connect(Config::DEVICE_ID, Config::DEVICE_TOKEN, Config::DEVICE_PASSWORD)) {
-      Serial.println("✅ Connected to ThingsBoard");
-      Config::STATUS = "ONLINE"; // set status after successful connect
+void connectToMQTTBroker() {
+  while (!client.connected()) {
+    Serial.println("☁️ Connecting to ThingsBoard...");
+    if (client.connect("ESP32_Client", token, NULL)) {
+      Serial.println("✅ Connected");
+      // *** Subscribe topic receive RPC ***
+      client.subscribe("v1/devices/me/rpc/request/+");
+      publishAttributes();
     } else {
-      Serial.print("❌ MQTT connect failed, state=");
-      Serial.println(mqttClient.state());
       delay(5000);
     }
   }
 }
 
 void publishTelemetry() {
-  JsonDocument doc;
-  doc["random_value"] = random(0, 100);
+  if (millis() - lastDHTReadTime < DHTReadInterval) return;
+  lastDHTReadTime = millis();
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) return;
+
+  JsonDocument doc; 
+  doc["temperature"] = t;
+  doc["humidity"] = h;
 
   String payload;
   serializeJson(doc, payload);
-
-  if (mqttClient.publish("v1/devices/me/telemetry", payload.c_str())) {
-    Serial.println("📨 Telemetry sent:");
-    Serial.println(payload);
-  } else {
-    Serial.println("❌ Telemetry publish failed");
-  }
+  client.publish("v1/devices/me/telemetry", payload.c_str());
+  Serial.println("📨 Sent: " + payload);
 }
 
 void publishAttributes() {
   JsonDocument doc;
-  doc["student_id"] = Config::STUDENT_ID;
-  doc["firmware_version"] = Config::FIRMWARE_VERSION;
-  doc["status"] = Config::STATUS;
+  doc["student_id"] = STUDENT_ID;
+  doc["firmware_version"] = FIRMWARE_VERSION;
 
   String payload;
   serializeJson(doc, payload);
 
-  if (mqttClient.publish("v1/devices/me/attributes", payload.c_str())) {
+  if (client.publish("v1/devices/me/attributes", payload.c_str())) {
     Serial.println("📨 Attributes sent:");
     Serial.println(payload);
   } else {
     Serial.println("❌ Attributes publish failed");
   }
-}
-
-void sendData() {
-  publishTelemetry();
-  publishAttributes();
 }
