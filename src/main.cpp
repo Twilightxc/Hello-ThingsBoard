@@ -10,7 +10,7 @@ void publishAttributes();
 char WIFI_SSID[] = "Wokwi-GUEST";
 char WIFI_PASSWORD[] = "";      
 const char* token = ""; // <-- Replace with your Access Token
-const char* thingsboard_server = "demo.thingsboard.io"; // if DNS fail use 104.196.24.70  | thingsboard.cloud
+const char* thingsboard_server = "demo.thingsboard.io"; // if DNS fail use 104.196.24.70  | thingsboard.cloud | eu.thingsboard.cloud
 const int port = 1883;
 
 const char STUDENT_ID[]      = "";   // <-- Replace with your Student ID
